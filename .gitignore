@@ -1,0 +1,67 @@
+# -------------------------
+# Python
+# -------------------------
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# -------------------------
+# Environment / secrets
+# -------------------------
+.env
+.env.*
+!.env.example
+
+# -------------------------
+# Node / n8n extractor
+# -------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Keep package files
+!package.json
+!package-lock.json
+
+# -------------------------
+# Generated registry outputs
+# -------------------------
+n8n-registry-extractor/output/
+n8n-registry-extractor/n8n_registry.json
+n8n-registry-extractor/n8n_registry_raw.json
+n8n-registry-extractor/n8n_registry_normalized.json
+n8n-registry-extractor/n8n_operation_index.json
+
+# Large generated JSON files
+*.large.json
+
+# -------------------------
+# Logs
+# -------------------------
+logs/
+*.log
+
+# -------------------------
+# OS / editor files
+# -------------------------
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# -------------------------
+# Temporary files
+# -------------------------
+tmp/
+temp/
+*.tmp
+*.bak

@@ -1,0 +1,95 @@
+/* ── n8n Design System ─────────────────────────────────────────────── */
+:root {
+  /* Backgrounds — exactly n8n's dark palette */
+  --n8n-bg:           #101014;
+  --n8n-surface:      #16161c;
+  --n8n-card:         #1c1c24;
+  --n8n-card-hover:   #21212c;
+  --n8n-input:        #1c1c24;
+  --n8n-tooltip:      #2a2a38;
+
+  /* Borders */
+  --n8n-border:       #2a2a38;
+  --n8n-border-focus: #3d3d56;
+  --n8n-border-bright:#4a4a6a;
+
+  /* Brand orange — n8n's signature */
+  --n8n-orange:       #ff6d5a;
+  --n8n-orange-dim:   rgba(255,109,90,0.12);
+  --n8n-orange-border:rgba(255,109,90,0.25);
+  --n8n-orange-hover: #ff5a45;
+
+  /* Semantic colors */
+  --n8n-green:        #22c55e;
+  --n8n-green-dim:    rgba(34,197,94,0.1);
+  --n8n-green-border: rgba(34,197,94,0.2);
+  --n8n-yellow:       #f59e0b;
+  --n8n-yellow-dim:   rgba(245,158,11,0.1);
+  --n8n-red:          #ef4444;
+  --n8n-red-dim:      rgba(239,68,68,0.1);
+  --n8n-blue:         #6366f1;
+  --n8n-blue-dim:     rgba(99,102,241,0.12);
+
+  /* Text */
+  --n8n-text-1:       #ececf1;
+  --n8n-text-2:       #9595a5;
+  --n8n-text-3:       #525270;
+  --n8n-text-4:       #35354a;
+
+  /* Typography */
+  --font:             'DM Sans', -apple-system, sans-serif;
+  --font-mono:        'DM Mono', 'Fira Code', monospace;
+}
+
+/* ── Reset ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #root { height: 100%; overflow: hidden; }
+
+body {
+  background: var(--n8n-bg);
+  color: var(--n8n-text-1);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button { font-family: var(--font); cursor: pointer; }
+a { text-decoration: none; }
+
+/* ── Scrollbar ─────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--n8n-border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--n8n-border-focus); }
+
+/* ── Animations ────────────────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1;   transform: scale(1);    }
+  50%       { opacity: 0.5; transform: scale(0.85); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+@keyframes typing {
+  0%, 80%, 100% { transform: scale(0.8); opacity: 0.4; }
+  40%            { transform: scale(1);   opacity: 1;   }
+}
+
+/* ── Utility classes ───────────────────────────────────────────────── */
+.fade-up   { animation: fadeUp  0.2s ease both; }
+.fade-in   { animation: fadeIn  0.15s ease both; }
+.spin      { animation: spin    0.8s linear infinite; }

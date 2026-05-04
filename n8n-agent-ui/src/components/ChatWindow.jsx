@@ -4,32 +4,34 @@ import Message from './Message'
 import PipelineStatus from './PipelineStatus'
 
 const ICO = {
-  menu:   'M3 12h18M3 6h18M3 18h18',
-  send:   'M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z',
-  spin:   'M21 12a9 9 0 1 1-6.22-8.56',
-  link:   'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3',
-  zap:    'M13 2L3 14h9l-1 10 10-12h-9l1-10z',
-  arrow:  'M5 12h14M12 5l7 7-7 7',
+  menu:  'M3 12h18M3 6h18M3 18h18',
+  send:  'M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z',
+  spin:  'M21 12a9 9 0 1 1-6.22-8.56',
+  link:  'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3',
+  zap:   'M13 2L3 14h9l-1 10 10-12h-9l1-10z',
+  arrow: 'M5 12h14M12 5l7 7-7 7',
+  edit:  'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z',
+  check: 'M20 6L9 17l-5-5',
 }
 
-const Icon = ({ d, size = 16, color = 'currentColor', sw = 1.75, fill = 'none' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill={fill}
+const Icon = ({ d, size = 16, color = 'currentColor', sw = 1.75 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
     stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
     <path d={d} />
   </svg>
 )
 
 const PIPELINE_STAGES = [
-  { id:'intent_parser',       label:'Intent Parser',        desc:'Reasoning about your full automation request' },
-  { id:'node_discovery',      label:'Node Discovery',       desc:'Searching 3,602 operations in registry' },
-  { id:'schema_retriever',    label:'Schema Retriever',     desc:'Loading full node schemas from Supabase' },
-  { id:'workflow_planner',    label:'Workflow Planner',     desc:'Planning node positions and connections' },
-  { id:'parameter_filler',    label:'Parameter Filler',     desc:'Filling parameters from real schemas' },
-  { id:'workflow_builder',    label:'Workflow Builder',     desc:'Assembling n8n workflow JSON' },
-  { id:'credential_resolver', label:'Credential Resolver',  desc:'Detecting required credentials' },
-  { id:'validator',           label:'Validator',            desc:'Checking structure and connections' },
-  { id:'reflection_agent',    label:'Reflection Agent',     desc:'Scoring workflow quality 1–10' },
-  { id:'deployer',            label:'Deployer',             desc:'Creating workflow in n8n via API' },
+  { id: 'intent_parser',       label: 'Intent Parser',        desc: 'Reasoning about your full automation request' },
+  { id: 'node_discovery',      label: 'Node Discovery',       desc: 'Searching 3,602 operations in registry' },
+  { id: 'schema_retriever',    label: 'Schema Retriever',     desc: 'Loading full node schemas from Supabase' },
+  { id: 'workflow_planner',    label: 'Workflow Planner',     desc: 'Planning node positions and connections' },
+  { id: 'parameter_filler',   label: 'Parameter Filler',     desc: 'Filling parameters from real schemas' },
+  { id: 'workflow_builder',    label: 'Workflow Builder',     desc: 'Assembling n8n workflow JSON' },
+  { id: 'credential_resolver', label: 'Credential Resolver',  desc: 'Detecting required credentials' },
+  { id: 'validator',           label: 'Validator',            desc: 'Checking structure and connections' },
+  { id: 'reflection_agent',    label: 'Reflection Agent',     desc: 'Scoring workflow quality 1–10' },
+  { id: 'deployer',            label: 'Deployer',             desc: 'Creating/updating workflow in n8n' },
 ]
 
 const SUGGESTIONS = [
@@ -40,11 +42,18 @@ const SUGGESTIONS = [
   { label: 'AI Summarizer',     text: 'Monitor Gmail for emails with the word invoice, extract the details and save a structured summary to Google Sheets' },
 ]
 
-export default function ChatWindow({ sessionId, workflowId, workflowName, onWorkflowCreated, onToggleSidebar }) {
-  const [messages,  setMessages]  = useState([])
-  const [input,     setInput]     = useState('')
-  const [loading,   setLoading]   = useState(false)
-  const [stageIdx,  setStageIdx]  = useState(-1)
+export default function ChatWindow({ sessionId, onWorkflowCreated, onToggleSidebar }) {
+  const [messages,        setMessages]        = useState([])
+  const [input,           setInput]           = useState('')
+  const [loading,         setLoading]         = useState(false)
+  const [stageIdx,        setStageIdx]        = useState(-1)
+
+  // ── Workflow tracking — persisted across all messages in this session ──────
+  const [activeWorkflowId,   setActiveWorkflowId]   = useState(null)
+  const [activeWorkflowName, setActiveWorkflowName] = useState(null)
+  const [workflowHistory,    setWorkflowHistory]    = useState([])
+  // workflowHistory = [{ id, name, version, timestamp }]
+
   const bottomRef = useRef(null)
   const inputRef  = useRef(null)
   const timerRef  = useRef(null)
@@ -55,13 +64,18 @@ export default function ChatWindow({ sessionId, workflowId, workflowName, onWork
 
   const addMsg = (m) => setMessages(p => [...p, { _id: Math.random(), ...m }])
 
+  // ── Determine mode from current state ─────────────────────────────────────
+  // If we have an activeWorkflowId → update mode
+  // Otherwise → create mode
+  const currentMode = activeWorkflowId ? 'update' : 'create'
+
   const submit = useCallback(async (text) => {
     const msg = (text || input).trim()
     if (!msg || loading) return
     setInput('')
     setLoading(true)
     setStageIdx(0)
-    addMsg({ role:'user', content:msg })
+    addMsg({ role: 'user', content: msg })
 
     // Animate pipeline stages
     let i = 0
@@ -74,22 +88,56 @@ export default function ChatWindow({ sessionId, workflowId, workflowName, onWork
       const res = await sendChat({
         message:    msg,
         sessionId,
-        mode:       workflowId ? 'update' : 'create',
-        workflowId: workflowId || undefined,
+        mode:       currentMode,
+        workflowId: activeWorkflowId || undefined,
       })
+
       clearInterval(timerRef.current)
       setStageIdx(-1)
       setLoading(false)
-      addMsg({ role:'assistant', content:res.response, result:res })
-      if (res.workflow_id) onWorkflowCreated(res.workflow_id, res.workflow_name)
+
+      // ── Update workflow tracking ──────────────────────────────────────────
+      if (res.workflow_id) {
+        const isNew = res.workflow_id !== activeWorkflowId
+        setActiveWorkflowId(res.workflow_id)
+        setActiveWorkflowName(res.workflow_name)
+
+        if (isNew) {
+          // Brand new workflow created
+          setWorkflowHistory(p => [{
+            id:        res.workflow_id,
+            name:      res.workflow_name,
+            version:   1,
+            timestamp: new Date().toLocaleTimeString(),
+            prompt:    msg,
+          }, ...p])
+          onWorkflowCreated(res.workflow_id, res.workflow_name)
+        } else {
+          // Existing workflow updated
+          setWorkflowHistory(p => p.map((w, idx) =>
+            idx === 0
+              ? { ...w, version: w.version + 1, timestamp: new Date().toLocaleTimeString() }
+              : w
+          ))
+        }
+      }
+
+      addMsg({
+        role:    'assistant',
+        content: res.response,
+        result:  res,
+        mode:    currentMode,
+      })
+
     } catch (err) {
       clearInterval(timerRef.current)
       setStageIdx(-1)
       setLoading(false)
-      addMsg({ role:'assistant', content:`Error: ${err.message}`, error:true })
+      addMsg({ role: 'assistant', content: `Error: ${err.message}`, error: true })
     }
+
     setTimeout(() => inputRef.current?.focus(), 80)
-  }, [input, loading, sessionId, workflowId, onWorkflowCreated])
+  }, [input, loading, sessionId, currentMode, activeWorkflowId, onWorkflowCreated])
 
   const onKey = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit() }
@@ -98,66 +146,117 @@ export default function ChatWindow({ sessionId, workflowId, workflowName, onWork
   const isEmpty = messages.length === 0 && stageIdx < 0
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'var(--n8n-bg)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--n8n-bg)' }}>
 
-      {/* ── Topbar ── */}
+      {/* ── Topbar ─────────────────────────────────────────────────────────── */}
       <div style={{
-        height:52, flexShrink:0,
-        display:'flex', alignItems:'center', gap:12, padding:'0 20px',
-        borderBottom:'1px solid var(--n8n-border)',
-        background:'var(--n8n-surface)',
+        height: 52, flexShrink: 0,
+        display: 'flex', alignItems: 'center', gap: 12, padding: '0 20px',
+        borderBottom: '1px solid var(--n8n-border)',
+        background: 'var(--n8n-surface)',
       }}>
         <button onClick={onToggleSidebar} style={{
-          background:'none', border:'none', color:'var(--n8n-text-3)',
-          padding:6, borderRadius:6, display:'flex', cursor:'pointer',
-          transition:'color 0.15s, background 0.15s',
+          background: 'none', border: 'none', color: 'var(--n8n-text-3)',
+          padding: 6, borderRadius: 6, display: 'flex', cursor: 'pointer',
+          transition: 'color 0.15s, background 0.15s',
         }}
-          onMouseEnter={e => { e.currentTarget.style.color='var(--n8n-text-1)'; e.currentTarget.style.background='var(--n8n-card)'; }}
-          onMouseLeave={e => { e.currentTarget.style.color='var(--n8n-text-3)'; e.currentTarget.style.background='none'; }}
+          onMouseEnter={e => { e.currentTarget.style.color = 'var(--n8n-text-1)'; e.currentTarget.style.background = 'var(--n8n-card)' }}
+          onMouseLeave={e => { e.currentTarget.style.color = 'var(--n8n-text-3)'; e.currentTarget.style.background = 'none' }}
         >
           <Icon d={ICO.menu} size={16} />
         </button>
 
-        <div style={{ flex:1, display:'flex', alignItems:'center', gap:10 }}>
-          {workflowName ? (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10 }}>
+          {activeWorkflowName ? (
             <>
-              <span style={{ fontSize:12, color:'var(--n8n-text-3)' }}>Active:</span>
+              {/* Mode badge */}
               <span style={{
-                fontSize:12, fontWeight:600, color:'var(--n8n-green)',
-                background:'var(--n8n-green-dim)', border:'1px solid var(--n8n-green-border)',
-                padding:'2px 10px', borderRadius:20,
-              }}>{workflowName}</span>
-              <span style={{ fontSize:12, color:'var(--n8n-text-3)' }}>· Continue chatting to modify</span>
+                fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+                letterSpacing: '0.06em', padding: '2px 8px', borderRadius: 20,
+                background: currentMode === 'update' ? 'var(--n8n-blue-dim)' : 'var(--n8n-orange-dim)',
+                color: currentMode === 'update' ? 'var(--n8n-blue)' : 'var(--n8n-orange)',
+                border: `1px solid ${currentMode === 'update' ? 'rgba(99,102,241,0.25)' : 'var(--n8n-orange-border)'}`,
+              }}>
+                {currentMode === 'update' ? '✎ Update' : '+ Create'}
+              </span>
+
+              {/* Workflow name */}
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--n8n-text-1)' }}>
+                {activeWorkflowName}
+              </span>
+
+              {/* Version count */}
+              {workflowHistory[0]?.version > 1 && (
+                <span style={{ fontSize: 11, color: 'var(--n8n-text-3)' }}>
+                  v{workflowHistory[0].version}
+                </span>
+              )}
             </>
           ) : (
-            <span style={{ fontSize:14, fontWeight:600, color:'var(--n8n-text-1)', letterSpacing:'-0.2px' }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--n8n-text-1)', letterSpacing: '-0.2px' }}>
               Build an automation
             </span>
           )}
         </div>
 
-        {workflowId && (
-          <a href={`http://localhost:5678/workflow/${workflowId}`} target="_blank" rel="noreferrer"
+        {/* Open in n8n button */}
+        {activeWorkflowId && (
+          <a href={`http://localhost:5678/workflow/${activeWorkflowId}`}
+            target="_blank" rel="noreferrer"
             style={{
-              display:'flex', alignItems:'center', gap:6, fontSize:12, fontWeight:500,
-              color:'var(--n8n-orange)', border:'1px solid var(--n8n-orange-border)',
-              background:'var(--n8n-orange-dim)', padding:'5px 12px', borderRadius:7,
-              transition:'all 0.15s',
+              display: 'flex', alignItems: 'center', gap: 6,
+              fontSize: 12, fontWeight: 500, color: 'var(--n8n-orange)',
+              border: '1px solid var(--n8n-orange-border)',
+              background: 'var(--n8n-orange-dim)',
+              padding: '5px 12px', borderRadius: 7,
+              transition: 'all 0.15s',
             }}
-            onMouseEnter={e => e.currentTarget.style.background='rgba(255,109,90,0.2)'}
-            onMouseLeave={e => e.currentTarget.style.background='var(--n8n-orange-dim)'}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,109,90,0.2)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'var(--n8n-orange-dim)'}
           >
             Open in n8n <Icon d={ICO.link} size={12} />
           </a>
         )}
       </div>
 
-      {/* ── Messages ── */}
-      <div style={{ flex:1, overflowY:'auto', padding:'0' }}>
+      {/* ── Workflow context banner (shows when workflow is active) ──────────── */}
+      {activeWorkflowId && (
+        <div style={{
+          padding: '8px 20px',
+          background: 'rgba(99,102,241,0.06)',
+          borderBottom: '1px solid rgba(99,102,241,0.15)',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <Icon d={ICO.check} size={12} color="var(--n8n-blue)" sw={2.5} />
+          <span style={{ fontSize: 12, color: 'var(--n8n-text-2)' }}>
+            Continuing to modify <strong style={{ color: 'var(--n8n-text-1)' }}>{activeWorkflowName}</strong>
+            {' '}— all messages in this conversation update the same workflow
+          </span>
+          <button
+            onClick={() => {
+              setActiveWorkflowId(null)
+              setActiveWorkflowName(null)
+            }}
+            style={{
+              marginLeft: 'auto', fontSize: 11, color: 'var(--n8n-text-3)',
+              background: 'none', border: '1px solid var(--n8n-border)',
+              padding: '2px 10px', borderRadius: 20, cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.color = 'var(--n8n-text-1)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--n8n-text-3)'}
+          >
+            Start new workflow
+          </button>
+        </div>
+      )}
+
+      {/* ── Messages ──────────────────────────────────────────────────────── */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0' }}>
         {isEmpty ? (
           <EmptyState onSuggest={submit} />
         ) : (
-          <div style={{ maxWidth:800, margin:'0 auto', padding:'28px 24px' }}>
+          <div style={{ maxWidth: 800, margin: '0 auto', padding: '28px 24px' }}>
             {messages.map(m => <Message key={m._id} message={m} />)}
             {stageIdx >= 0 && <PipelineStatus stageIdx={stageIdx} stages={PIPELINE_STAGES} />}
             <div ref={bottomRef} />
@@ -165,22 +264,22 @@ export default function ChatWindow({ sessionId, workflowId, workflowName, onWork
         )}
       </div>
 
-      {/* ── Input ── */}
+      {/* ── Input ─────────────────────────────────────────────────────────── */}
       <div style={{
-        flexShrink:0, padding:'14px 24px 18px',
-        borderTop:'1px solid var(--n8n-border)',
-        background:'var(--n8n-surface)',
+        flexShrink: 0, padding: '14px 24px 18px',
+        borderTop: '1px solid var(--n8n-border)',
+        background: 'var(--n8n-surface)',
       }}>
-        <div style={{ maxWidth:800, margin:'0 auto' }}>
+        <div style={{ maxWidth: 800, margin: '0 auto' }}>
           <div style={{
-            display:'flex', alignItems:'flex-end', gap:10,
-            background:'var(--n8n-input)',
-            border:'1px solid var(--n8n-border)',
-            borderRadius:10, padding:'10px 12px',
-            transition:'border-color 0.15s',
+            display: 'flex', alignItems: 'flex-end', gap: 10,
+            background: 'var(--n8n-input)',
+            border: '1px solid var(--n8n-border)',
+            borderRadius: 10, padding: '10px 12px',
+            transition: 'border-color 0.15s',
           }}
-            onFocusCapture={e => e.currentTarget.style.borderColor='var(--n8n-border-focus)'}
-            onBlurCapture={e  => e.currentTarget.style.borderColor='var(--n8n-border)'}
+            onFocusCapture={e => e.currentTarget.style.borderColor = 'var(--n8n-border-focus)'}
+            onBlurCapture={e  => e.currentTarget.style.borderColor = 'var(--n8n-border)'}
           >
             <textarea
               ref={inputRef}
@@ -188,16 +287,16 @@ export default function ChatWindow({ sessionId, workflowId, workflowName, onWork
               onChange={e => setInput(e.target.value)}
               onKeyDown={onKey}
               disabled={loading}
-              placeholder={workflowId
-                ? 'Describe what you want to change…'
-                : 'Describe the automation you want to build…'}
+              placeholder={
+                activeWorkflowId
+                  ? `Modify "${activeWorkflowName}" — add nodes, change conditions, rename…`
+                  : 'Describe the automation you want to build…'
+              }
               rows={1}
               style={{
-                flex:1, background:'none', border:'none', outline:'none',
-                color:'var(--n8n-text-1)', fontFamily:'var(--font)',
-                fontSize:14, resize:'none', lineHeight:1.6,
-                maxHeight:120, overflow:'auto',
-                '::placeholder': { color: 'var(--n8n-text-3)' },
+                flex: 1, background: 'none', border: 'none', outline: 'none',
+                color: 'var(--n8n-text-1)', fontFamily: 'var(--font)',
+                fontSize: 14, resize: 'none', lineHeight: 1.6, maxHeight: 120, overflow: 'auto',
               }}
               onInput={e => {
                 e.target.style.height = 'auto'
@@ -208,25 +307,34 @@ export default function ChatWindow({ sessionId, workflowId, workflowName, onWork
               onClick={() => submit()}
               disabled={loading || !input.trim()}
               style={{
-                flexShrink:0, padding:'7px 14px', borderRadius:7, border:'none',
+                flexShrink: 0, padding: '7px 14px', borderRadius: 7, border: 'none',
                 background: (!loading && input.trim()) ? 'var(--n8n-orange)' : 'var(--n8n-border)',
                 color: (!loading && input.trim()) ? '#fff' : 'var(--n8n-text-3)',
-                display:'flex', alignItems:'center', gap:6,
-                fontSize:13, fontWeight:600, cursor: (!loading && input.trim()) ? 'pointer' : 'not-allowed',
-                transition:'all 0.15s',
+                display: 'flex', alignItems: 'center', gap: 6,
+                fontSize: 13, fontWeight: 600,
+                cursor: (!loading && input.trim()) ? 'pointer' : 'not-allowed',
+                transition: 'all 0.15s',
               }}
-              onMouseEnter={e => { if (!loading && input.trim()) e.currentTarget.style.background='var(--n8n-orange-hover)' }}
-              onMouseLeave={e => { if (!loading && input.trim()) e.currentTarget.style.background='var(--n8n-orange)' }}
+              onMouseEnter={e => { if (!loading && input.trim()) e.currentTarget.style.background = 'var(--n8n-orange-hover)' }}
+              onMouseLeave={e => { if (!loading && input.trim()) e.currentTarget.style.background = 'var(--n8n-orange)' }}
             >
               {loading
-                ? <Icon d={ICO.spin} size={14} color="var(--n8n-text-3)" style={{ animation:'spin 0.8s linear infinite' }} />
+                ? <svg className="spin" width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round"><path d={ICO.spin} /></svg>
                 : <Icon d={ICO.send} size={14} color={input.trim() ? '#fff' : 'var(--n8n-text-3)'} sw={2} />
               }
-              {loading ? 'Building…' : 'Send'}
+              {loading
+                ? currentMode === 'update' ? 'Updating…' : 'Building…'
+                : currentMode === 'update' ? 'Update' : 'Build'
+              }
             </button>
           </div>
-          <div style={{ marginTop:7, textAlign:'center', fontSize:11, color:'var(--n8n-text-4)' }}>
-            {loading ? 'Agent pipeline running — this takes 15–30 seconds' : 'Enter to send · Shift+Enter for new line'}
+          <div style={{ marginTop: 7, textAlign: 'center', fontSize: 11, color: 'var(--n8n-text-4)' }}>
+            {loading
+              ? 'Agent pipeline running — this takes 15–30 seconds'
+              : activeWorkflowId
+                ? `Updating existing workflow · Enter to send`
+                : 'Enter to send · Shift+Enter for new line'
+            }
           </div>
         </div>
       </div>
@@ -238,56 +346,55 @@ function EmptyState({ onSuggest }) {
   const [hov, setHov] = useState(null)
   return (
     <div style={{
-      display:'flex', flexDirection:'column', alignItems:'center',
-      justifyContent:'center', minHeight:'100%', padding:'60px 24px',
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      justifyContent: 'center', minHeight: '100%', padding: '60px 24px',
     }}>
-      {/* Hero */}
-      <div style={{ textAlign:'center', marginBottom:48 }}>
+      <div style={{ textAlign: 'center', marginBottom: 48 }}>
         <div style={{
-          width:64, height:64, borderRadius:16, margin:'0 auto 20px',
-          background:'linear-gradient(135deg,#ff6d5a,#ff3d2f)',
-          display:'flex', alignItems:'center', justifyContent:'center',
-          boxShadow:'0 8px 24px rgba(255,109,90,0.3)',
+          width: 64, height: 64, borderRadius: 16, margin: '0 auto 20px',
+          background: 'linear-gradient(135deg,#ff6d5a,#ff3d2f)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 8px 24px rgba(255,109,90,0.3)',
         }}>
           <Icon d={ICO.zap} size={28} color="#fff" sw={2.5} />
         </div>
-        <h1 style={{ fontSize:26, fontWeight:700, color:'var(--n8n-text-1)', letterSpacing:'-0.5px', marginBottom:10 }}>
+        <h1 style={{ fontSize: 26, fontWeight: 700, color: 'var(--n8n-text-1)', letterSpacing: '-0.5px', marginBottom: 10 }}>
           What should we automate?
         </h1>
-        <p style={{ fontSize:14, color:'var(--n8n-text-2)', maxWidth:440, lineHeight:1.7, margin:'0 auto' }}>
+        <p style={{ fontSize: 14, color: 'var(--n8n-text-2)', maxWidth: 440, lineHeight: 1.7, margin: '0 auto' }}>
           Describe your automation in plain English. The agent reasons through the full
-          solution, selects real n8n nodes from the registry, and deploys a working workflow.
+          solution, selects real n8n nodes, and deploys a working workflow. Then keep
+          chatting to refine it.
         </p>
       </div>
 
-      {/* Suggestions grid */}
-      <div style={{ width:'100%', maxWidth:660 }}>
-        <div style={{ fontSize:11, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.08em', color:'var(--n8n-text-3)', marginBottom:12, textAlign:'center' }}>
+      <div style={{ width: '100%', maxWidth: 660 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--n8n-text-3)', marginBottom: 12, textAlign: 'center' }}>
           Try one of these
         </div>
-        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {SUGGESTIONS.map((s, i) => (
             <button key={i} onClick={() => onSuggest(s.text)}
               onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)}
               style={{
-                width:'100%', padding:'13px 16px', textAlign:'left',
-                background: hov===i ? 'var(--n8n-card-hover)' : 'var(--n8n-card)',
-                border:'1px solid ' + (hov===i ? 'var(--n8n-border-focus)' : 'var(--n8n-border)'),
-                borderRadius:10, cursor:'pointer',
-                display:'flex', alignItems:'flex-start', gap:12,
-                transition:'all 0.15s',
+                width: '100%', padding: '13px 16px', textAlign: 'left',
+                background: hov === i ? 'var(--n8n-card-hover)' : 'var(--n8n-card)',
+                border: `1px solid ${hov === i ? 'var(--n8n-border-focus)' : 'var(--n8n-border)'}`,
+                borderRadius: 10, cursor: 'pointer',
+                display: 'flex', alignItems: 'flex-start', gap: 12,
+                transition: 'all 0.15s',
               }}
             >
               <span style={{
-                fontSize:10, fontWeight:700, color:'var(--n8n-orange)', textTransform:'uppercase',
-                letterSpacing:'0.06em', background:'var(--n8n-orange-dim)',
-                border:'1px solid var(--n8n-orange-border)',
-                padding:'2px 8px', borderRadius:20, flexShrink:0, marginTop:1,
+                fontSize: 10, fontWeight: 700, color: 'var(--n8n-orange)',
+                textTransform: 'uppercase', letterSpacing: '0.06em',
+                background: 'var(--n8n-orange-dim)', border: '1px solid var(--n8n-orange-border)',
+                padding: '2px 8px', borderRadius: 20, flexShrink: 0, marginTop: 1,
               }}>{s.label}</span>
-              <span style={{ fontSize:13, color: hov===i ? 'var(--n8n-text-1)' : 'var(--n8n-text-2)', lineHeight:1.5 }}>
+              <span style={{ fontSize: 13, color: hov === i ? 'var(--n8n-text-1)' : 'var(--n8n-text-2)', lineHeight: 1.5 }}>
                 {s.text}
               </span>
-              <Icon d={ICO.arrow} size={14} color={hov===i ? 'var(--n8n-orange)' : 'var(--n8n-text-4)'} style={{ flexShrink:0, marginLeft:'auto', marginTop:2 }} />
+              <Icon d={ICO.arrow} size={14} color={hov === i ? 'var(--n8n-orange)' : 'var(--n8n-text-4)'} />
             </button>
           ))}
         </div>
